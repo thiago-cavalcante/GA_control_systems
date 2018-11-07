@@ -32,6 +32,12 @@
 
 #include "Galgo.hpp"
 
+/* deviation */
+double deviation = 0.000000001;
+#define MAXNUMBADPEAKS (2)
+#define MAXNUMGRADS (10)
+#define MINDIFFYSS (0.001)
+
 Eigen::MatrixXd myA(2, 2);
 Eigen::MatrixXd myB(2, 1);
 Eigen::MatrixXd myC(1, 2);
@@ -88,6 +94,7 @@ double y_ss(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
   yss = AUX2(0, 0) * u;
   return yss;
 }
+
 bool isSameSign(double a, double b)
 {
   if(((a >= 0) && (b >= 0)) || ((a <= 0) && (b <= 0)))
@@ -95,6 +102,7 @@ bool isSameSign(double a, double b)
   else
     return false;
 }
+
 int check_state_space_stability(Eigen::MatrixXd matrixA)
 {
   int i;
@@ -113,6 +121,7 @@ int check_state_space_stability(Eigen::MatrixXd matrixA)
   }
   return 1; // stable system
 }
+
 bool isEigPos(Eigen::MatrixXd A)
 {
   int isStable=1, i;
@@ -138,6 +147,7 @@ bool isEigPos(Eigen::MatrixXd A)
   else
     return false;
 }
+
 void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
                  Eigen::MatrixXd D, Eigen::MatrixXd x0, double *out,
                  double yss, double u)
@@ -189,47 +199,18 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
     }
   }
 }
-double c_bar(double yp, double yss, double lambmax, int kp)
-{
-  double cbar;
-  cbar = (yp-yss)/(pow(lambmax, kp));
-  return cbar;
-}
+
 double cplxMag(double real, double imag)
 {
   return sqrt(real * real + imag * imag);
 }
-double maxMagEigVal(Eigen::MatrixXd A)
+
+int objective_function_OS(Eigen::MatrixXd K)
 {
-  double _real, _imag;
-  double maximum = 0, aux;
-  int i;
-  Eigen::VectorXcd eivals = A.eigenvalues();
-  for(i = 0; i < A.rows(); i++)
-  {
-    _real = eivals[i].real();
-    _imag = eivals[i].imag();
-    aux = cplxMag(_real, _imag);
-    if(aux > maximum)
-    {
-      maximum = aux;
-    }
-  }
-  return maximum;
-}
-double log_b(double base, double x)
-{
-  return static_cast<double> (log(x) / log(base));
-}
-int objective_function_ST(Eigen::MatrixXd K)
-{
-  double k_ss, x, yp, yss, u;
-  double p = 5;
-  double peakV[2];
+	double peakV[2];
+  double yss, yp, mp,_PO, u = 1.0;
   int kp, order = K.cols();
   Eigen::MatrixXd A(order, order), C(1, order);
-//  _A(0,0)= -0.5;_A(0,1)= 0.4;
-//  _A(1,0)= -0.4;_A(1,1)= -0.5;
 
   myA(0,0) = -0.5; myA(0,1) = 0.4;
   myA(1,0) = -0.4; myA(1,1) = -0.5;
@@ -242,42 +223,19 @@ int objective_function_ST(Eigen::MatrixXd K)
 
   myx0(0,0) = 0.0; myx0(1,0) = 0.0;
 
-  std::cout << "lambdaMax(myA)= " << maxMagEigVal(myA) << std::endl;
-//  B(0,0)=0.0;B(1,0)=2.5;
-//
-//  _C(0,0)=0.0;_C(0,1)=2.6;
-//
-//  D(0.0) = 0.0;
-//
-//  x0(0,0)=0.0;x0(1,0)=0.0;
-
-//  A = _A - B * K;
-//  C = _C - D * K;
-
   A = myA - myB * K;
   C = myC - myD * K;
 
-  double lambdaMax;
-  lambdaMax = maxMagEigVal(A);
-//  lambdaMax = 0.5241;
-//  order = 2;
-  u = 1.0;
   yss = y_ss(A, myB, C, myD, u);
-//  yss = 16.2629;
-  std::cout << "lambdaMax= " << lambdaMax << std::endl;
-  std::cout << "order= " << order << std::endl;
-  std::cout << "yss= " << yss << std::endl;
+  std::cout << "yss=" << yss << std::endl;
   peak_output(A, myB, C, myD, myx0, peakV, yss, u);
   yp = static_cast<double> (peakV[1]);
-  kp = static_cast<int> (peakV[0]);
-//  std::cout << "kp= " << kp << std::endl;
-//  std::cout << "yp= " << yp << std::endl;
-//  yp = 16.2629;
-//  kp = 56;
-  double cbar = c_bar(yp, yss, lambdaMax, kp);
-  x = fabs((p * yss) / (100 * cbar));
-  k_ss = log_b(lambdaMax, x);
-  return abs(ceil(k_ss)) + order;
+  std::cout << "yp=" << yp << std::endl;
+  mp = cplxMag(cplxMag(yp,0)-cplxMag(yss,0),0);
+  std::cout << "mp=" << mp << std::endl;
+  _PO = cplxMag((mp/yss),0);
+  std::cout << "PO=" << _PO*100 << std::endl;
+  return _PO;
 }
 
 // objective class example
@@ -298,7 +256,7 @@ public:
       K(0,i) = static_cast<double>(x[i]);
     }
 //	  T obj = my_function(K);
-    T obj = -objective_function_ST(K);
+    T obj = -objective_function_OS(K);
     return {obj};
   }
   // NB: GALGO maximize by default so we will maximize -f(x,y)
@@ -311,7 +269,7 @@ template <typename T>
 std::vector<T> MyConstraint(const std::vector<T>& x)
 {
   Eigen::MatrixXd K(1, x.size()), A(x.size(), x.size());
-  int ksr = 6;
+  int POr = 6/100;
   for(int i = 0; i < x.size(); i++)
   {
     K(0, i) = static_cast<double>(x[i]);
@@ -323,8 +281,8 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
 
   A = myA - myB*K;
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
-  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
-//  return {-objective_function_ST(K), objective_function_ST(K)-ksr};
+//  return {-k_bar(K), k_bar(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
+  return {-objective_function_OS(K), objective_function_OS(K)-POr, static_cast<double>(-check_state_space_stability(A)), static_cast<double>(check_state_space_stability(A)-1)};
 //  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 
@@ -334,9 +292,9 @@ int main()
 {
    // initializing parameters lower and upper bounds
    // an initial value can be added inside the initializer list after the upper bound
-   std::vector<double> p1 = {0.0, 1.0};
+   std::vector<double> p1 = {0.0, 0.5};
 //   gen_rand_controller(2, 0.0, 1.0);
-   std::vector<double> p2 = {0.0, 13.0};
+   std::vector<double> p2 = {0.0, 1.0};
    galgo::Parameter<double> par1(p1);
    galgo::Parameter<double> par2(p2);
    // here both parameter will be encoded using 16 bits the default value inside the template declaration

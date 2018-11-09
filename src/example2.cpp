@@ -334,9 +334,9 @@ int main()
 {
    // initializing parameters lower and upper bounds
    // an initial value can be added inside the initializer list after the upper bound
-   std::vector<double> p1 = {0.0, 1.0};
+   std::vector<double> p1 = {0.0, 0.5};
 //   gen_rand_controller(2, 0.0, 1.0);
-   std::vector<double> p2 = {0.0, 13.0};
+   std::vector<double> p2 = {0.0, 0.9};
    galgo::Parameter<double> par1(p1);
    galgo::Parameter<double> par2(p2);
    // here both parameter will be encoded using 16 bits the default value inside the template declaration

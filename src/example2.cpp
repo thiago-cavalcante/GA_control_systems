@@ -323,8 +323,8 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
 
   A = myA - myB*K;
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
-  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
-//  return {-objective_function_ST(K), objective_function_ST(K)-ksr};
+//  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
+  return {-check_state_space_stability(A), check_state_space_stability(A)-1};
 //  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 

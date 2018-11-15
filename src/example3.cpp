@@ -204,6 +204,24 @@ double cplxMag(double real, double imag)
 {
   return sqrt(real * real + imag * imag);
 }
+double maxMagEigVal(Eigen::MatrixXd A)
+{
+  double _real, _imag;
+  double maximum = 0, aux;
+  int i;
+  Eigen::VectorXcd eivals = A.eigenvalues();
+  for(i = 0; i < A.rows(); i++)
+  {
+    _real = eivals[i].real();
+    _imag = eivals[i].imag();
+    aux = cplxMag(_real, _imag);
+    if(aux > maximum)
+    {
+      maximum = aux;
+    }
+  }
+  return maximum;
+}
 
 int objective_function_OS(Eigen::MatrixXd K)
 {
@@ -282,7 +300,7 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
   A = myA - myB*K;
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
 //  return {-k_bar(K), k_bar(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
-  return {-objective_function_OS(K), objective_function_OS(K)-POr, static_cast<double>(-check_state_space_stability(A)), static_cast<double>(check_state_space_stability(A)-1)};
+  return {-objective_function_OS(K), objective_function_OS(K)-POr, maxMagEigVal(A)-1};
 //  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 

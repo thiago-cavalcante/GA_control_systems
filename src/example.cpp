@@ -2,7 +2,17 @@
 //                    Copyright (C) 2017 Olivier Mallet - All Rights Reserved                      
 //=================================================================================================
 
+/* eigen dependencies */
+#include <Eigen/Eigenvalues>
+#include <unsupported/Eigen/Polynomials>
+#include <unsupported/Eigen/MatrixFunctions>
+
 #include "Galgo.hpp"
+
+double my_function(Eigen::MatrixXd K)
+{
+ return -(pow(1-K(0,0),2)+100*pow(K(0,1)-K(0,0)*K(0,0),2));
+}
 
 // objective class example
 template <typename T>
@@ -13,7 +23,12 @@ public:
    // minimizing f(x,y) = (1 - x)^2 + 100 * (y - x^2)^2
    static std::vector<T> Objective(const std::vector<T>& x)
    {
-      T obj = -(pow(1-x[0],2)+100*pow(x[1]-x[0]*x[0],2));
+      Eigen::MatrixXd K(1, x.size());
+	  for(int i = 0; i < static_cast<int>(x.size()); i++)
+	  {
+	    K(0,i) = static_cast<double>(x[i]);
+	  }
+      T obj = my_function(K);
       return {obj};
    }
    // NB: GALGO maximize by default so we will maximize -f(x,y)
@@ -25,7 +40,13 @@ public:
 template <typename T>
 std::vector<T> MyConstraint(const std::vector<T>& x)
 {
-  return {x[0]*x[1]+x[0]-x[1]+1.5,10-x[0]*x[1]};
+	Eigen::MatrixXd K(1, x.size()), A(x.size(), x.size());
+	for(int i = 0; i < static_cast<int>(x.size()); i++)
+	{
+	  K(0, i) = static_cast<double>(x[i]);
+	}
+//  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
+	return {-my_function(K), my_function(K)-2.0};
 }
 // NB: a penalty will be applied if one of the constraints is > 0 
 // using the default adaptation to constraint(s) method

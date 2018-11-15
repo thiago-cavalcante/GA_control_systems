@@ -113,12 +113,35 @@ int check_state_space_stability(Eigen::MatrixXd matrixA)
   }
   return 1; // stable system
 }
+double cplxMag(double real, double imag)
+{
+  return sqrt(real * real + imag * imag);
+}
+double maxMagEigVal(Eigen::MatrixXd A)
+{
+  double _real, _imag;
+  double maximum = 0, aux;
+  int i;
+  Eigen::VectorXcd eivals = A.eigenvalues();
+  for(i = 0; i < A.rows(); i++)
+  {
+    _real = eivals[i].real();
+    _imag = eivals[i].imag();
+    aux = cplxMag(_real, _imag);
+    if(aux > maximum)
+    {
+      maximum = aux;
+    }
+  }
+  return maximum;
+}
 bool isEigPos(Eigen::MatrixXd A)
 {
-  int isStable=1, i;
+  int isStable, i;
   std::complex<double> lambda;
   bool status;
-  isStable = check_state_space_stability(A);
+//  isStable = check_state_space_stability(A);
+  isStable = ((maxMagEigVal(A) <= 1)&&(maxMagEigVal(A) >= 0)) ? 1:0;
   Eigen::VectorXcd eivals = A.eigenvalues();
 //  std::cout << "test: " << std::endl;
   for(i = 0; i < A.rows(); i++)
@@ -142,9 +165,8 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
                  Eigen::MatrixXd D, Eigen::MatrixXd x0, double *out,
                  double yss, double u)
 {
-  double cur, pre, pos, greatest, peak, cmp, o;
-  int i = 0, nStates;
-  nStates = static_cast<int>(A.rows());
+  double cur, pre, pos, peak;
+  int i = 0;
   bool test = isEigPos(A);
   if(test)
   {
@@ -195,28 +217,7 @@ double c_bar(double yp, double yss, double lambmax, int kp)
   cbar = (yp-yss)/(pow(lambmax, kp));
   return cbar;
 }
-double cplxMag(double real, double imag)
-{
-  return sqrt(real * real + imag * imag);
-}
-double maxMagEigVal(Eigen::MatrixXd A)
-{
-  double _real, _imag;
-  double maximum = 0, aux;
-  int i;
-  Eigen::VectorXcd eivals = A.eigenvalues();
-  for(i = 0; i < A.rows(); i++)
-  {
-    _real = eivals[i].real();
-    _imag = eivals[i].imag();
-    aux = cplxMag(_real, _imag);
-    if(aux > maximum)
-    {
-      maximum = aux;
-    }
-  }
-  return maximum;
-}
+
 double log_b(double base, double x)
 {
   return static_cast<double> (log(x) / log(base));
@@ -293,7 +294,7 @@ public:
   {
 //     T obj = -(pow(1-x[0],2)+100*pow(x[1]-x[0]*x[0],2));
     Eigen::MatrixXd K(1, x.size());
-    for(int i = 0; i < x.size(); i++)
+    for(int i = 0; i < static_cast<int>(x.size()); i++)
     {
       K(0,i) = static_cast<double>(x[i]);
     }
@@ -312,7 +313,7 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
 {
   Eigen::MatrixXd K(1, x.size()), A(x.size(), x.size());
   int ksr = 6;
-  for(int i = 0; i < x.size(); i++)
+  for(int i = 0; i < static_cast<int>(x.size()); i++)
   {
     K(0, i) = static_cast<double>(x[i]);
   }
@@ -323,8 +324,10 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
 
   A = myA - myB*K;
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
-//  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
-  return {-check_state_space_stability(A), check_state_space_stability(A)-1};
+//  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A)+1};
+//  return {-check_state_space_stability(A)+1};
+  return {-maxMagEigVal(A), maxMagEigVal(A)-1, -objective_function_ST(K), objective_function_ST(K)-ksr};
+//  return {-check_state_space_stability(A), check_state_space_stability(A)-1};
 //  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 

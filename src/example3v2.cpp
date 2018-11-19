@@ -131,7 +131,7 @@ bool isEigPos(Eigen::MatrixXd A)
   int isStable, i;
   std::complex<double> lambda;
   bool status;
-  isStable = (maxMagEigVal(A) <= 1) ? 1:0;
+  isStable = ((maxMagEigVal(A) <= 1)&&(maxMagEigVal(A) >= 0)) ? 1:0;
   Eigen::VectorXcd eivals = A.eigenvalues();
   for(i = 0; i < A.rows(); i++)
   {
@@ -155,51 +155,66 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
                  double yss, double u)
 {
   double cur, pre, pos, greatest, peak, cmp, o;
-  int i = 0, nStates;
-  nStates = static_cast<int>(A.rows());
-  bool test = isEigPos(A);
-  if(test)
-  {
-    out[1] = yss;
-    out[0] = i;
-  }
-  else
-  {
-    pre = y_k(A, B, C, D, u, i, x0);
-    cur = y_k(A, B, C, D, u, i+1, x0);
-    pos = y_k(A, B, C, D, u, i+2, x0);
-    out[1] = pre;
-    out[0] = i;
-    peak = pre;
-    while((fabs(out[1]) <= fabs(peak)) && !(std::isnan(fabs(cur))))
+  int i = 0, numBadPeaks = 0, firstGradSampleIdx, lastPeakIdx, lastGrad = 1, grad = 0;
+  double lastPeak, firstGradSample;
+  firstGradSample = y_k(A, B, C, D, u, i, x0);
+  lastPeak = y_k(A, B, C, D, u, i, x0);
+  lastPeakIdx = i;
+    while(1)
     {
-      if((out[1] != cur) && !(std::isnan(fabs(cur))))
+      if(fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(y_k(A, B, C, D, u, i, x0)))
       {
-        if((fabs(cur) >= fabs(pos)) && (fabs(cur) >= fabs(pre)))
+        grad = (grad > 0)?(grad + 1):1;
+        if(fabs(y_k(A, B, C, D, u, i+1, x0)) != fabs(y_k(A, B, C, D, u, i, x0)))
         {
-          peak = cur;
-        }
-        if((out[1] != peak) && (isSameSign(yss, peak)) &&
-           (fabs(peak) > fabs(out[1])))
-        {
-          out[0] = i+1;
-          out[1] = peak;
+  	      firstGradSample = y_k(A, B, C, D, u, i+1, x0);
+  	      firstGradSampleIdx = i + 1;
         }
       }
-      i++;
-      pre = cur;
-      cur = pos;
-      pos = y_k(A, B, C, D, u, i+2, x0);
+      else
+      {
+        grad = (grad < 0)?(grad - 1):-1;
+      }
+      if((lastGrad > 0) && (grad < 0))
+      {
+        if(fabs(firstGradSample) <= fabs(lastPeak))
+        {
+          ++numBadPeaks;
+          if(numBadPeaks > MAXNUMBADPEAKS)
+          {
+            break;
+  	      }
+        }
+        else
+        {
+  	      lastPeak = firstGradSample;
+  	      lastPeakIdx = firstGradSampleIdx;
+        }
+      }
+      else if((grad > MAXNUMGRADS) && (fabs((y_k(A, B, C, D, u, i+1, x0) - yss)/yss) < MINDIFFYSS))
+      {
+        if(fabs(yss) > fabs(lastPeak))
+        {
+  	      lastPeak = yss;
+  	      lastPeakIdx = 0;
+        }
+        break;
+      }
+      lastGrad = grad;
+      ++i;
     }
-  }
+    out[0] = lastPeakIdx;
+    out[1] = lastPeak;
 }
 
 int objective_function_OS(Eigen::MatrixXd K)
 {
   double peakV[2];
-  double yss, yp, mp,_PO, u = 1.0;
-  int kp, order = K.cols();
+  double yss, yp, mp, _PO, u;
+  int order = K.cols();
   Eigen::MatrixXd A(order, order), C(1, order);
+
+  u = 1.0;
 
   myA(0,0) = -0.5; myA(0,1) = 0.4;
   myA(1,0) = -0.4; myA(1,1) = -0.5;
@@ -240,12 +255,12 @@ public:
   {
 //     T obj = -(pow(1-x[0],2)+100*pow(x[1]-x[0]*x[0],2));
     Eigen::MatrixXd K(1, x.size());
-    for(int i = 0; i < x.size(); i++)
+    for(int i = 0; i < static_cast<int>(x.size()); i++)
     {
       K(0,i) = static_cast<double>(x[i]);
     }
 //	  T obj = my_function(K);
-    T obj = objective_function_OS(K);
+    T obj = -objective_function_OS(K);
     return {obj};
   }
   // NB: GALGO maximize by default so we will maximize -f(x,y)
@@ -260,8 +275,9 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
   int order = static_cast<int> (x.size());
   Eigen::MatrixXd K(1, order), A(order, order), C(1, order);
   int POr = 6/100, kp;
-  double yss, yp, mp, _PO, u = 1.0;
+  double yss, yp, mp, _PO, u;
   double peakV[2];
+  u = 1.0;
   for(int i = 0; i < order; i++)
   {
     K(0, i) = static_cast<double>(x[i]);

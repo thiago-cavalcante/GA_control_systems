@@ -38,28 +38,6 @@ Eigen::MatrixXd myC(1, 2);
 Eigen::MatrixXd myD(1, 1);
 Eigen::MatrixXd myx0(2, 1);
 
-double my_function(Eigen::MatrixXd K)
-{
- return -(pow(1-K(0,0),2)+100*pow(K(0,1)-K(0,0)*K(0,0),2));
-}
-
-std::vector<double> gen_rand_controller(int n, double l, double u)
-{
-  // First create an instance of an engine.
-  std::random_device rnd_device;
-  // Specify the engine and distribution.
-  std::mt19937 mersenne_engine {rnd_device()};  // Generates random integers
-  std::uniform_real_distribution<double> dist {l, u};
-
-  auto gen = [&dist, &mersenne_engine](){
-             return dist(mersenne_engine);
-             };
-
-  std::vector<double> vec(n);
-  std::generate(begin(vec), end(vec), gen);
-  return vec;
-}
-
 double y_k(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
            Eigen::MatrixXd D, double u, int k, Eigen::MatrixXd x0)
 {
@@ -70,7 +48,7 @@ double y_k(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
   {
     y += (C * A.pow(k - m - 1) * B * u) + D * u;
   }
-  return y(0, 0);
+  return static_cast<double>(y(0, 0));
 }
 double y_ss(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
             Eigen::MatrixXd D, double u)
@@ -95,24 +73,6 @@ bool isSameSign(double a, double b)
   else
     return false;
 }
-int check_state_space_stability(Eigen::MatrixXd matrixA)
-{
-  int i;
-  std::complex<double> lambda;
-  double v;
-  Eigen::VectorXcd eivals = matrixA.eigenvalues();
-  for(i = 0; i < matrixA.rows(); i++)
-  {
-    lambda = eivals[i];
-    v = std::sqrt(lambda.real()*lambda.real()+lambda.imag()*lambda.imag());
-    if(v > 1.0)
-    {
-      std::cout << "unstable: " << std::endl;
-      return 0; // unstable system
-    }
-  }
-  return 1; // stable system
-}
 double cplxMag(double real, double imag)
 {
   return sqrt(real * real + imag * imag);
@@ -123,7 +83,7 @@ double maxMagEigVal(Eigen::MatrixXd A)
   double maximum = 0, aux;
   int i;
   Eigen::VectorXcd eivals = A.eigenvalues();
-  for(i = 0; i < A.rows(); i++)
+  for(i = 0; i < static_cast<int>(A.rows()); i++)
   {
     _real = eivals[i].real();
     _imag = eivals[i].imag();
@@ -140,11 +100,9 @@ bool isEigPos(Eigen::MatrixXd A)
   int isStable, i;
   std::complex<double> lambda;
   bool status;
-//  isStable = check_state_space_stability(A);
   isStable = ((maxMagEigVal(A) <= 1)&&(maxMagEigVal(A) >= 0)) ? 1:0;
   Eigen::VectorXcd eivals = A.eigenvalues();
-//  std::cout << "test: " << std::endl;
-  for(i = 0; i < A.rows(); i++)
+  for(i = 0; i < static_cast<int>(A.rows()); i++)
   {
     lambda = eivals[i];
     if(lambda.real() >= 0)
@@ -155,7 +113,6 @@ bool isEigPos(Eigen::MatrixXd A)
       break;
     }
   }
-//  std::cout << "test2: " << std::endl;
   if((isStable == 1) && (status == true))
     return true;
   else
@@ -165,51 +122,57 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
                  Eigen::MatrixXd D, Eigen::MatrixXd x0, double *out,
                  double yss, double u)
 {
-  double cur, pre, pos, peak;
-  int i = 0;
-  bool test = isEigPos(A);
-  if(test)
+  double cur, pre, pos, greatest, peak, cmp, o;
+  int i = 0, numBadPeaks = 0, firstGradSampleIdx, lastPeakIdx, lastGrad = 1, grad = 0;
+  double lastPeak, firstGradSample;
+  firstGradSample = y_k(A, B, C, D, u, i, x0);
+  lastPeak = y_k(A, B, C, D, u, i, x0);
+  lastPeakIdx = i;
+  while(1)
   {
-//	std::cout << "inside: " << test << std::endl;
-    out[1] = yss;
-    out[0] = i;
-  }
-  else
-  {
-//	std::cout << "outside: " << std::endl;
-    pre = y_k(A, B, C, D, u, i, x0);
-    cur = y_k(A, B, C, D, u, i+1, x0);
-    pos = y_k(A, B, C, D, u, i+2, x0);
-    out[1] = pre;
-    out[0] = i;
-    peak = pre;
-    while((fabs(out[1]) <= fabs(peak)) && !(std::isnan(fabs(cur))))
+    if(fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(y_k(A, B, C, D, u, i, x0)))
     {
-      if((out[1] != cur) && !(std::isnan(fabs(cur))))
+      grad = (grad > 0)?(grad + 1):1;
+      if(fabs(y_k(A, B, C, D, u, i+1, x0)) != fabs(y_k(A, B, C, D, u, i, x0)))
       {
-//    	std::cout << "outside1: " << std::endl;
-//    	std::cout << "fabs(cur)=" << fabs(cur) << std::endl;
-//    	std::cout << "fabs(pre)=" << fabs(pre) << std::endl;
-//    	std::cout << "fabs(pos)=" << fabs(pos) << std::endl;
-        if((fabs(cur) >= fabs(pos)) && (fabs(cur) >= fabs(pre)))
-        {
-          peak = cur;
-//          std::cout << "outside2: " << std::endl;
-        }
-        if((out[1] != peak) && (isSameSign(yss, peak)) &&
-           (fabs(peak) > fabs(out[1])))
-        {
-          out[0] = i+1;
-          out[1] = peak;
-//          std::cout << "outside3: " << std::endl;
-        }
+        firstGradSample = y_k(A, B, C, D, u, i+1, x0);
+        firstGradSampleIdx = i + 1;
       }
-      i++;
-      pre = cur;
-      cur = pos;
-      pos = y_k(A, B, C, D, u, i+2, x0);
     }
+    else
+    {
+      grad = (grad < 0)?(grad - 1):-1;
+    }
+    if((lastGrad > 0) && (grad < 0))
+    {
+      if(fabs(firstGradSample) <= fabs(lastPeak))
+      {
+        ++numBadPeaks;
+        if(numBadPeaks > MAXNUMBADPEAKS)
+        {
+          break;
+  	    }
+      }
+      else
+      {
+  	    lastPeak = firstGradSample;
+  	    lastPeakIdx = firstGradSampleIdx;
+      }
+    }
+    else if((grad > MAXNUMGRADS) && (fabs((y_k(A, B, C, D, u, i+1, x0) - yss)/yss) < MINDIFFYSS))
+    {
+      if(fabs(yss) > fabs(lastPeak))
+      {
+  	    lastPeak = yss;
+  	    lastPeakIdx = 0;
+      }
+      break;
+    }
+    lastGrad = grad;
+    ++i;
   }
+  out[0] = lastPeakIdx;
+  out[1] = lastPeak;
 }
 double c_bar(double yp, double yss, double lambmax, int kp)
 {
@@ -227,10 +190,8 @@ int objective_function_ST(Eigen::MatrixXd K)
   double k_ss, x, yp, yss, u;
   double p = 5;
   double peakV[2];
-  int kp, order = K.cols();
+  int kp, order = static_cast<int>(K.cols());
   Eigen::MatrixXd A(order, order), C(1, order);
-//  _A(0,0)= -0.5;_A(0,1)= 0.4;
-//  _A(1,0)= -0.4;_A(1,1)= -0.5;
 
   myA(0,0) = -0.5; myA(0,1) = 0.4;
   myA(1,0) = -0.4; myA(1,1) = -0.5;
@@ -242,19 +203,6 @@ int objective_function_ST(Eigen::MatrixXd K)
   myD(0.0) = 0.0;
 
   myx0(0,0) = 0.0; myx0(1,0) = 0.0;
-
-  std::cout << "lambdaMax(myA)= " << maxMagEigVal(myA) << std::endl;
-//  B(0,0)=0.0;B(1,0)=2.5;
-//
-//  _C(0,0)=0.0;_C(0,1)=2.6;
-//
-//  D(0.0) = 0.0;
-//
-//  x0(0,0)=0.0;x0(1,0)=0.0;
-
-
-//  A = _A - B * K;
-//  C = _C - D * K;
 
   A = myA - myB * K;
   C = myC - myD * K;

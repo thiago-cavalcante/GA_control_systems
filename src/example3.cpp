@@ -44,28 +44,6 @@ Eigen::MatrixXd myC(1, 2);
 Eigen::MatrixXd myD(1, 1);
 Eigen::MatrixXd myx0(2, 1);
 
-double my_function(Eigen::MatrixXd K)
-{
- return -(pow(1-K(0,0),2)+100*pow(K(0,1)-K(0,0)*K(0,0),2));
-}
-
-std::vector<double> gen_rand_controller(int n, double l, double u)
-{
-  // First create an instance of an engine.
-  std::random_device rnd_device;
-  // Specify the engine and distribution.
-  std::mt19937 mersenne_engine {rnd_device()};  // Generates random integers
-  std::uniform_real_distribution<double> dist {l, u};
-
-  auto gen = [&dist, &mersenne_engine](){
-             return dist(mersenne_engine);
-             };
-
-  std::vector<double> vec(n);
-  std::generate(begin(vec), end(vec), gen);
-  return vec;
-}
-
 double y_k(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
            Eigen::MatrixXd D, double u, int k, Eigen::MatrixXd x0)
 {

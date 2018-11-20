@@ -24,7 +24,6 @@
 #include <string>
 #include <vector>
 
-
 /* eigen dependencies */
 #include <Eigen/Eigenvalues>
 #include <unsupported/Eigen/Polynomials>
@@ -43,28 +42,6 @@ Eigen::MatrixXd myB(2, 1);
 Eigen::MatrixXd myC(1, 2);
 Eigen::MatrixXd myD(1, 1);
 Eigen::MatrixXd myx0(2, 1);
-
-double my_function(Eigen::MatrixXd K)
-{
- return -(pow(1-K(0,0),2)+100*pow(K(0,1)-K(0,0)*K(0,0),2));
-}
-
-std::vector<double> gen_rand_controller(int n, double l, double u)
-{
-  // First create an instance of an engine.
-  std::random_device rnd_device;
-  // Specify the engine and distribution.
-  std::mt19937 mersenne_engine {rnd_device()};  // Generates random integers
-  std::uniform_real_distribution<double> dist {l, u};
-
-  auto gen = [&dist, &mersenne_engine](){
-             return dist(mersenne_engine);
-             };
-
-  std::vector<double> vec(n);
-  std::generate(begin(vec), end(vec), gen);
-  return vec;
-}
 
 double y_k(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
            Eigen::MatrixXd D, double u, int k, Eigen::MatrixXd x0)
@@ -160,51 +137,51 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
   firstGradSample = y_k(A, B, C, D, u, i, x0);
   lastPeak = y_k(A, B, C, D, u, i, x0);
   lastPeakIdx = i;
-    while(1)
+  while(1)
+  {
+    if(fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(y_k(A, B, C, D, u, i, x0)))
     {
-      if(fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(y_k(A, B, C, D, u, i, x0)))
+      grad = (grad > 0)?(grad + 1):1;
+      if(fabs(y_k(A, B, C, D, u, i+1, x0)) != fabs(y_k(A, B, C, D, u, i, x0)))
       {
-        grad = (grad > 0)?(grad + 1):1;
-        if(fabs(y_k(A, B, C, D, u, i+1, x0)) != fabs(y_k(A, B, C, D, u, i, x0)))
+        firstGradSample = y_k(A, B, C, D, u, i+1, x0);
+        firstGradSampleIdx = i + 1;
+      }
+    }
+    else
+    {
+      grad = (grad < 0)?(grad - 1):-1;
+    }
+    if((lastGrad > 0) && (grad < 0))
+    {
+      if(fabs(firstGradSample) <= fabs(lastPeak))
+      {
+        ++numBadPeaks;
+        if(numBadPeaks > MAXNUMBADPEAKS)
         {
-  	      firstGradSample = y_k(A, B, C, D, u, i+1, x0);
-  	      firstGradSampleIdx = i + 1;
+          break;
         }
       }
       else
       {
-        grad = (grad < 0)?(grad - 1):-1;
+        lastPeak = firstGradSample;
+        lastPeakIdx = firstGradSampleIdx;
       }
-      if((lastGrad > 0) && (grad < 0))
-      {
-        if(fabs(firstGradSample) <= fabs(lastPeak))
-        {
-          ++numBadPeaks;
-          if(numBadPeaks > MAXNUMBADPEAKS)
-          {
-            break;
-  	      }
-        }
-        else
-        {
-  	      lastPeak = firstGradSample;
-  	      lastPeakIdx = firstGradSampleIdx;
-        }
-      }
-      else if((grad > MAXNUMGRADS) && (fabs((y_k(A, B, C, D, u, i+1, x0) - yss)/yss) < MINDIFFYSS))
-      {
-        if(fabs(yss) > fabs(lastPeak))
-        {
-  	      lastPeak = yss;
-  	      lastPeakIdx = 0;
-        }
-        break;
-      }
-      lastGrad = grad;
-      ++i;
     }
-    out[0] = lastPeakIdx;
-    out[1] = lastPeak;
+    else if((grad > MAXNUMGRADS) && (fabs((y_k(A, B, C, D, u, i+1, x0) - yss)/yss) < MINDIFFYSS))
+    {
+      if(fabs(yss) > fabs(lastPeak))
+      {
+        lastPeak = yss;
+        lastPeakIdx = 0;
+      }
+      break;
+    }
+    lastGrad = grad;
+    ++i;
+  }
+  out[0] = lastPeakIdx;
+  out[1] = lastPeak;
 }
 
 int objective_function_OS(Eigen::MatrixXd K)

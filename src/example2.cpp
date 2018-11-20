@@ -38,28 +38,6 @@ Eigen::MatrixXd myC(1, 2);
 Eigen::MatrixXd myD(1, 1);
 Eigen::MatrixXd myx0(2, 1);
 
-double my_function(Eigen::MatrixXd K)
-{
- return -(pow(1-K(0,0),2)+100*pow(K(0,1)-K(0,0)*K(0,0),2));
-}
-
-std::vector<double> gen_rand_controller(int n, double l, double u)
-{
-  // First create an instance of an engine.
-  std::random_device rnd_device;
-  // Specify the engine and distribution.
-  std::mt19937 mersenne_engine {rnd_device()};  // Generates random integers
-  std::uniform_real_distribution<double> dist {l, u};
-
-  auto gen = [&dist, &mersenne_engine](){
-             return dist(mersenne_engine);
-             };
-
-  std::vector<double> vec(n);
-  std::generate(begin(vec), end(vec), gen);
-  return vec;
-}
-
 double y_k(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
            Eigen::MatrixXd D, double u, int k, Eigen::MatrixXd x0)
 {
@@ -94,24 +72,6 @@ bool isSameSign(double a, double b)
     return true;
   else
     return false;
-}
-int check_state_space_stability(Eigen::MatrixXd matrixA)
-{
-  int i;
-  std::complex<double> lambda;
-  double v;
-  Eigen::VectorXcd eivals = matrixA.eigenvalues();
-  for(i = 0; i < matrixA.rows(); i++)
-  {
-    lambda = eivals[i];
-    v = std::sqrt(lambda.real()*lambda.real()+lambda.imag()*lambda.imag());
-    if(v > 1.0)
-    {
-      std::cout << "unstable: " << std::endl;
-      return 0; // unstable system
-    }
-  }
-  return 1; // stable system
 }
 double cplxMag(double real, double imag)
 {
@@ -229,8 +189,6 @@ int objective_function_ST(Eigen::MatrixXd K)
   double peakV[2];
   int kp, order = K.cols();
   Eigen::MatrixXd A(order, order), C(1, order);
-//  _A(0,0)= -0.5;_A(0,1)= 0.4;
-//  _A(1,0)= -0.4;_A(1,1)= -0.5;
 
   myA(0,0) = -0.5; myA(0,1) = 0.4;
   myA(1,0) = -0.4; myA(1,1) = -0.5;
@@ -242,19 +200,6 @@ int objective_function_ST(Eigen::MatrixXd K)
   myD(0.0) = 0.0;
 
   myx0(0,0) = 0.0; myx0(1,0) = 0.0;
-
-  std::cout << "lambdaMax(myA)= " << maxMagEigVal(myA) << std::endl;
-//  B(0,0)=0.0;B(1,0)=2.5;
-//
-//  _C(0,0)=0.0;_C(0,1)=2.6;
-//
-//  D(0.0) = 0.0;
-//
-//  x0(0,0)=0.0;x0(1,0)=0.0;
-
-
-//  A = _A - B * K;
-//  C = _C - D * K;
 
   A = myA - myB * K;
   C = myC - myD * K;

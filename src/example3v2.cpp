@@ -36,12 +36,12 @@ double deviation = 0.000000001;
 #define MAXNUMBADPEAKS (2)
 #define MAXNUMGRADS (10)
 #define MINDIFFYSS (0.001)
-
-Eigen::MatrixXd myA(2, 2);
-Eigen::MatrixXd myB(2, 1);
-Eigen::MatrixXd myC(1, 2);
+int g = 4;
+Eigen::MatrixXd myA(g, g);
+Eigen::MatrixXd myB(g, 1);
+Eigen::MatrixXd myC(1, g);
 Eigen::MatrixXd myD(1, 1);
-Eigen::MatrixXd myx0(2, 1);
+Eigen::MatrixXd myx0(g, 1);
 
 double y_k(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
            Eigen::MatrixXd D, double u, int k, Eigen::MatrixXd x0)
@@ -134,57 +134,72 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
   double cur, pre, pos, greatest, peak, cmp, o;
   int i = 0, numBadPeaks = 0, firstGradSampleIdx, lastPeakIdx, lastGrad = 1, grad = 0;
   double lastPeak, firstGradSample;
+  int isStable = ((maxMagEigVal(A) <= 1)&&(maxMagEigVal(A) >= 0)) ? 1:0;
   firstGradSample = y_k(A, B, C, D, u, i, x0);
   lastPeak = y_k(A, B, C, D, u, i, x0);
   lastPeakIdx = i;
-  while(1)
+  std::cout << "firstGradSample=" << firstGradSample << std::endl;
+  std::cout << "lastGrad=" << lastGrad << std::endl;
+  std::cout << "grad=" << grad << std::endl;
+  std::cout << "lastPeak=" << lastPeak << std::endl;
+  if(isStable == 1)
   {
-    if(fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(y_k(A, B, C, D, u, i, x0)))
+    while(1)
     {
-      grad = (grad > 0)?(grad + 1):1;
-      if(fabs(y_k(A, B, C, D, u, i+1, x0)) != fabs(y_k(A, B, C, D, u, i, x0)))
+      if(fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(y_k(A, B, C, D, u, i, x0)))
       {
-        firstGradSample = y_k(A, B, C, D, u, i+1, x0);
-        firstGradSampleIdx = i + 1;
-      }
-    }
-    else
-    {
-      grad = (grad < 0)?(grad - 1):-1;
-    }
-    if((lastGrad > 0) && (grad < 0))
-    {
-      if(fabs(firstGradSample) <= fabs(lastPeak))
-      {
-        ++numBadPeaks;
-        if(numBadPeaks > MAXNUMBADPEAKS)
+        grad = (grad > 0)?(grad + 1):1;
+        std::cout << "grad=" << grad << std::endl;
+        if(fabs(y_k(A, B, C, D, u, i+1, x0)) != fabs(y_k(A, B, C, D, u, i, x0)))
         {
-          break;
+          firstGradSample = y_k(A, B, C, D, u, i+1, x0);
+          std::cout << "firstGradSample=" << firstGradSample << std::endl;
+          firstGradSampleIdx = i + 1;
         }
       }
       else
       {
-        lastPeak = firstGradSample;
-        lastPeakIdx = firstGradSampleIdx;
+        grad = (grad < 0)?(grad - 1):-1;
+        std::cout << "grad=" << grad << std::endl;
       }
-    }
-    else if((grad > MAXNUMGRADS) && (fabs((y_k(A, B, C, D, u, i+1, x0) - yss)/yss) < MINDIFFYSS))
-    {
-      if(fabs(yss) > fabs(lastPeak))
+      if((lastGrad > 0) && (grad < 0))
       {
-        lastPeak = yss;
-        lastPeakIdx = 0;
+        if(fabs(firstGradSample) <= fabs(lastPeak))
+        {
+          ++numBadPeaks;
+          if(numBadPeaks > MAXNUMBADPEAKS)
+          {
+            break;
+          }
+        }
+        else
+        {
+          lastPeak = firstGradSample;
+          std::cout << "lastPeak=" << lastPeak << std::endl;
+          lastPeakIdx = firstGradSampleIdx;
+        }
       }
-      break;
+      else if(((fabs(grad) > MAXNUMGRADS) && (fabs((y_k(A, B, C, D, u, i+1, x0) - yss)/yss) < MINDIFFYSS)) || (fabs(grad) > 500))
+      {
+        if(fabs(yss) > fabs(lastPeak))
+        {
+          lastPeak = yss;
+          std::cout << "lastPeak=" << lastPeak << std::endl;
+          lastPeakIdx = 0;
+        }
+        break;
+      }
+      lastGrad = grad;
+      std::cout << "lastGrad=" << lastGrad << std::endl;
+      ++i;
     }
-    lastGrad = grad;
-    ++i;
+    out[0] = lastPeakIdx;
+    out[1] = lastPeak;
   }
-  out[0] = lastPeakIdx;
-  out[1] = lastPeak;
+  std::cout << "unstable system! There's nothing to do!" << std::endl;
 }
 
-int objective_function_OS(Eigen::MatrixXd K)
+double objective_function_OS(Eigen::MatrixXd K)
 {
   double peakV[2];
   double yss, yp, mp, _PO, u;
@@ -193,7 +208,7 @@ int objective_function_OS(Eigen::MatrixXd K)
 
   u = 1.0;
 
-  myA(0,0) = -0.5; myA(0,1) = 0.4;
+  /*myA(0,0) = -0.5; myA(0,1) = 0.4;
   myA(1,0) = -0.4; myA(1,1) = -0.5;
 
   myB(0,0) = 0.0; myB(1,0) = 2.5;
@@ -202,7 +217,20 @@ int objective_function_OS(Eigen::MatrixXd K)
 
   myD(0.0) = 0.0;
 
-  myx0(0,0) = 0.0; myx0(1,0) = 0.0;
+  myx0(0,0) = 0.0; myx0(1,0) = 0.0;*/
+
+  myA(0,0) = -0.5; myA(0,1) = 0.4; myA(0,2) = 1.0; myA(0,3) = 0.0;
+  myA(1,0) = -0.4; myA(1,1) = -0.5; myA(1,2) = 0.0; myA(1,3) = 1.0;
+  myA(2,0) = 0.0; myA(2,1) = 0.0; myA(2,2) = -0.5; myA(2,3) = 0.4;
+  myA(3,0) = 0.0; myA(3,1) = 0.0; myA(3,2) = -0.4; myA(3,3) = -0.5;
+
+  myB(0,0) = 0.0; myB(1,0) = 0.0; myB(2,0) = 2.5; myB(3,0) = 1.6;
+
+  myC(0,0) = 0.0; myC(0,1) = 2.6; myC(0,2) = 0.0; myC(0,3) = 2.0;
+
+  myD(0.0) = 0.0;
+
+  myx0(0,0) = 0.0; myx0(1,0) = 0.0; myx0(2,0) = 0.0; myx0(3,0) = 0.0;
 
   A = myA - myB * K;
   C = myC - myD * K;
@@ -217,6 +245,57 @@ int objective_function_OS(Eigen::MatrixXd K)
   _PO = cplxMag((mp/yss),0);
   std::cout << "PO=" << _PO*100 << std::endl;
   return _PO;
+}
+
+double c_bar(double yp, double yss, double lambmax, int kp)
+{
+  double cbar;
+  cbar = (yp-yss)/(pow(lambmax, kp));
+  return cbar;
+}
+
+double log_b(double base, double x)
+{
+  return static_cast<double> (log(x) / log(base));
+}
+int objective_function_ST(Eigen::MatrixXd K)
+{
+  double k_ss, x, yp, yss, u;
+  double p = 5;
+  double peakV[2];
+  int kp, order = static_cast<int>(K.cols());
+  Eigen::MatrixXd A(order, order), C(1, order);
+
+  myA(0,0) = -0.5; myA(0,1) = 0.4; myA(0,2) = 1.0; myA(0,3) = 0.0;
+  myA(1,0) = -0.4; myA(1,1) = -0.5; myA(1,2) = 0.0; myA(1,3) = 1.0;
+  myA(2,0) = 0.0; myA(2,1) = 0.0; myA(2,2) = -0.5; myA(2,3) = 0.4;
+  myA(3,0) = 0.0; myA(3,1) = 0.0; myA(3,2) = -0.4; myA(3,3) = -0.5;
+
+  myB(0,0) = 0.0; myB(1,0) = 0.0; myB(2,0) = 2.5; myB(3,0) = 1.6;
+
+  myC(0,0) = 0.0; myC(0,1) = 2.6; myC(0,2) = 0.0; myC(0,3) = 2.0;
+
+  myD(0.0) = 0.0;
+
+  myx0(0,0) = 0.0; myx0(1,0) = 0.0; myx0(2,0) = 0.0; myx0(3,0) = 0.0;
+
+  A = myA - myB * K;
+  C = myC - myD * K;
+
+  double lambdaMax;
+  lambdaMax = maxMagEigVal(A);
+  u = 1.0;
+  yss = y_ss(A, myB, C, myD, u);
+  std::cout << "lambdaMax= " << lambdaMax << std::endl;
+  std::cout << "order= " << order << std::endl;
+  std::cout << "yss= " << yss << std::endl;
+  peak_output(A, myB, C, myD, myx0, peakV, yss, u);
+  yp = static_cast<double> (peakV[1]);
+  kp = static_cast<int> (peakV[0]);
+  double cbar = c_bar(yp, yss, lambdaMax, kp);
+  x = fabs((p * yss) / (100 * cbar));
+  k_ss = log_b(lambdaMax, x);
+  return abs(ceil(k_ss)) + order;
 }
 
 // objective class example
@@ -237,7 +316,7 @@ public:
       K(0,i) = static_cast<double>(x[i]);
     }
 //	  T obj = my_function(K);
-    T obj = -objective_function_OS(K);
+    T obj = -objective_function_ST(K);
     return {obj};
   }
   // NB: GALGO maximize by default so we will maximize -f(x,y)
@@ -260,16 +339,27 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
     K(0, i) = static_cast<double>(x[i]);
   }
 
-  myA(0,0) = -0.5; myA(0,1) = 0.4;
+/*  myA(0,0) = -0.5; myA(0,1) = 0.4;
   myA(1,0) = -0.4; myA(1,1) = -0.5;
 
   myB(0,0) = 0.0; myB(1,0) = 2.5;
 
   myC(0,0) = 0.0; myC(0,1) = 2.6;
 
+  myD(0.0) = 0.0;*/
+
+  myA(0,0) = -0.5; myA(0,1) = 0.4; myA(0,2) = 1.0; myA(0,3) = 0.0;
+  myA(1,0) = -0.4; myA(1,1) = -0.5; myA(1,2) = 0.0; myA(1,3) = 1.0;
+  myA(2,0) = 0.0; myA(2,1) = 0.0; myA(2,2) = -0.5; myA(2,3) = 0.4;
+  myA(3,0) = 0.0; myA(3,1) = 0.0; myA(3,2) = -0.4; myA(3,3) = -0.5;
+
+  myB(0,0) = 0.0; myB(1,0) = 0.0; myB(2,0) = 2.5; myB(3,0) = 1.6;
+
+  myC(0,0) = 0.0; myC(0,1) = 2.6; myC(0,2) = 0.0; myC(0,3) = 2.0;
+
   myD(0.0) = 0.0;
 
-  myx0(0,0) = 0.0; myx0(1,0) = 0.0;
+  myx0(0,0) = 0.0; myx0(1,0) = 0.0; myx0(2,0) = 0.0; myx0(3,0) = 0.0;
 
   A = myA - myB * K;
   C = myC - myD * K;
@@ -281,7 +371,9 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
   _PO = cplxMag((mp/yss),0);
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
 //  return {-k_bar(K), k_bar(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
-  return {-_PO, _PO-POr, -maxMagEigVal(A), maxMagEigVal(A)-1};
+//  return {-_PO, _PO-POr, -maxMagEigVal(A), maxMagEigVal(A)-1};
+  //return {-objective_function_OS(K), maxMagEigVal(A)-1};
+  return { maxMagEigVal(A)-1, 100*objective_function_OS(K)-POr, -100*objective_function_OS(K)};
 //  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 
@@ -291,16 +383,20 @@ int main()
 {
    // initializing parameters lower and upper bounds
    // an initial value can be added inside the initializer list after the upper bound
-   std::vector<double> p1 = {0.0, 0.5};
+   std::vector<double> p1 = {0.0, 0.3};
 //   gen_rand_controller(2, 0.0, 1.0);
-   std::vector<double> p2 = {0.0, 1.0};
+   std::vector<double> p2 = {0.0, 0.5};
+   std::vector<double> p3 = {0.0, 0.7};
+   std::vector<double> p4 = {0.0, 1.0};
    galgo::Parameter<double> par1(p1);
    galgo::Parameter<double> par2(p2);
+   galgo::Parameter<double> par3(p3);
+   galgo::Parameter<double> par4(p4);
    // here both parameter will be encoded using 16 bits the default value inside the template declaration
    // this value can be modified but has to remain between 1 and 64
 
    // initiliazing genetic algorithm
-   galgo::GeneticAlgorithm<double> ga(MyObjective<double>::Objective,100,50,true,par1,par2);
+   galgo::GeneticAlgorithm<double> ga(MyObjective<double>::Objective,100,150,true,par1,par2,par3,par4);
 
    // setting constraints
    ga.Constraint = MyConstraint;

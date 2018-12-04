@@ -45,7 +45,7 @@ public:
    std::vector<T> (*Constraint)(const std::vector<T>&) = nullptr; 
 
    T covrate = .50;   // cross-over rate
-   T mutrate = .05;   // mutation rate   
+   T mutrate = .05;   // mutation rate
    T SP = 1.5;        // selective pressure for RSP selection method 
    T tolerance = 0.0; // terminal condition (inactive if equal to zero)
                  
@@ -53,7 +53,7 @@ public:
    int matsize;       // mating pool size, set to popsize by default
    int tntsize = 10;  // tournament size
    int genstep = 10;  // generation step for outputting results
-   int precision = 5; // precision for outputting results
+   int precision = 10; // precision for outputting results
 
    // constructor
    template <int...N>

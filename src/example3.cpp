@@ -171,13 +171,15 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
     }
   }
 }
-
-int objective_function_OS(Eigen::MatrixXd K)
+double percentage_overshoot(Eigen::MatrixXd K)
 {
   double peakV[2];
-  double yss, yp, mp,_PO, u = 1.0;
-  int kp, order = K.cols();
+  double yss, yp, mp,_PO, u;
+  int kp, order;
+  order = K.cols();
   Eigen::MatrixXd A(order, order), C(1, order);
+
+  u = 1.0;
 
   myA(0,0) = -0.5; myA(0,1) = 0.4;
   myA(1,0) = -0.4; myA(1,1) = -0.5;
@@ -188,7 +190,38 @@ int objective_function_OS(Eigen::MatrixXd K)
 
   myD(0.0) = 0.0;
 
-  myx0(0,0) = 0.0; myx0(1,0) = 0.0;
+  myx0(0,0) = 0.0;
+
+  A = myA - myB * K;
+  C = myC - myD * K;
+
+  yss = y_ss(A, myB, C, myD, u);
+  peak_output(A, myB, C, myD, myx0, peakV, yss, u);
+  yp = static_cast<double> (peakV[1]);
+  mp = cplxMag(cplxMag(yp,0)-cplxMag(yss,0),0);
+  _PO = cplxMag((mp/yss),0);
+  return _PO;
+}
+double objective_function_OS(Eigen::MatrixXd K)
+{
+  double peakV[2];
+  double yss, yp, mp,_PO, u;
+  int kp, order;
+  order = K.cols();
+  Eigen::MatrixXd A(order, order), C(1, order);
+
+  u = 1.0;
+
+  myA(0,0) = -0.5; myA(0,1) = 0.4;
+  myA(1,0) = -0.4; myA(1,1) = -0.5;
+
+  myB(0,0) = 0.0; myB(1,0) = 2.5;
+
+  myC(0,0) = 0.0; myC(0,1) = 2.6;
+
+  myD(0.0) = 0.0;
+
+  myx0(0,0) = 0.0;
 
   A = myA - myB * K;
   C = myC - myD * K;
@@ -223,7 +256,7 @@ public:
       K(0,i) = static_cast<double>(x[i]);
     }
 //	  T obj = my_function(K);
-    T obj = objective_function_OS(K);
+    T obj = -objective_function_OS(K);
     return {obj};
   }
   // NB: GALGO maximize by default so we will maximize -f(x,y)
@@ -250,23 +283,24 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
 
   myB(0,0) = 0.0; myB(1,0) = 2.5;
 
-  myC(0,0) = 0.0; myC(0,1) = 2.6;
+//  myC(0,0) = 0.0; myC(0,1) = 2.6;
 
-  myD(0.0) = 0.0;
+//  myD(0.0) = 0.0;
 
-  myx0(0,0) = 0.0; myx0(1,0) = 0.0;
+//  myx0(0,0) = 0.0; myx0(1,0) = 0.0;
 
   A = myA - myB * K;
-  C = myC - myD * K;
+//  C = myC - myD * K;
 
-  yss = y_ss(A, myB, C, myD, u);
+/*  yss = y_ss(A, myB, C, myD, u);
   peak_output(A, myB, C, myD, myx0, peakV, yss, u);
   yp = static_cast<double> (peakV[1]);
   mp = cplxMag(cplxMag(yp,0)-cplxMag(yss,0),0);
-  _PO = cplxMag((mp/yss),0);
+  _PO = cplxMag((mp/yss),0);*/
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
-//  return {-k_bar(K), k_bar(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
-  return {-_PO, _PO-POr, -maxMagEigVal(A), maxMagEigVal(A)-1};
+//  return {-objective_function_OS(K), objective_function_OS(K)-POr, -maxMagEigVal(A), maxMagEigVal(A)-1};
+//  return {-maxMagEigVal(A), maxMagEigVal(A)-1};
+  return {-percentage_overshoot(K), percentage_overshoot(K)-POr, -maxMagEigVal(A), maxMagEigVal(A)-1};
 //  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 

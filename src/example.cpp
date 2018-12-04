@@ -45,8 +45,8 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
 	{
 	  K(0, i) = static_cast<double>(x[i]);
 	}
-//  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
-	return {-my_function(K), my_function(K)-2.0};
+  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
+	//return {-my_function(K), my_function(K)-2.0};
 }
 // NB: a penalty will be applied if one of the constraints is > 0 
 // using the default adaptation to constraint(s) method

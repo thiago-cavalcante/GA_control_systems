@@ -37,6 +37,8 @@ double deviation = 0.000000001;
 #define MAXNUMBADPEAKS (2)
 #define MAXNUMGRADS (10)
 #define MINDIFFYSS (0.001)
+#define SAMPTIME (0.5)
+#define MAXNUMATTEMP (int)(((1/SAMPTIME)*20) + 1)
 int g = 4;
 Eigen::MatrixXd myA(g, g);
 Eigen::MatrixXd myB(g, 1);
@@ -124,7 +126,7 @@ bool isEigPos(Eigen::MatrixXd A)
   else
     return false;
 }
-void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
+/*void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
                  Eigen::MatrixXd D, Eigen::MatrixXd x0, double *out,
                  double yss, double u)
 {
@@ -190,6 +192,39 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
       std::cout << "lastGrad=" << lastGrad << std::endl;
       ++i;
     }
+    out[0] = lastPeakIdx;
+    out[1] = lastPeak;
+  }
+  std::cout << "unstable system! There's nothing to do!" << std::endl;
+}*/
+void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
+                 Eigen::MatrixXd D, Eigen::MatrixXd x0, double *out,
+                 double yss, double u)
+{
+  int i = 0, lastPeakIdx = 0, attempts = 0;
+  double lastPeak = yss;
+  int isStable = ((maxMagEigVal(A) <= 1)&&(maxMagEigVal(A) >= 0)) ? 1:0;
+  if(isStable == 1)
+  {
+    while(1)
+    {
+      if((((y_k(A, B, C, D, u, i, x0)*yss) > 0) || ((y_k(A, B, C, D, u, i, x0) + yss) >= 0)) && (fabs(y_k(A, B, C, D, u, i, x0) - yss) > fabs(lastPeak - yss)))
+	  {
+        lastPeak = y_k(A, B, C, D, u, i, x0);
+        lastPeakIdx = i;
+        attempts = 0;
+      }
+      else
+      {
+        ++attempts;
+      }
+      if(attempts > MAXNUMATTEMP)
+      {
+        break;
+      }
+      ++i;
+    }
+    printf("status:%f %i %i\n", lastPeak, lastPeakIdx, MAXNUMATTEMP);
     out[0] = lastPeakIdx;
     out[1] = lastPeak;
   }
@@ -315,7 +350,7 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
 //  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A)+1};
 //  return {-check_state_space_stability(A)+1};
-  return { -lambdaMax, lambdaMax-1, -objective_function_ST(K), objective_function_ST(K)-ksr};
+  return { -lambdaMax, lambdaMax-1.0, -kh, kh-ksr };
   //return {-maxMagEigVal(A), maxMagEigVal(A)-1};
 //  return {-check_state_space_stability(A), check_state_space_stability(A)-1};
 //  -check_state_space_stability(A)
@@ -327,27 +362,29 @@ int main()
 {
    // initializing parameters lower and upper bounds
    // an initial value can be added inside the initializer list after the upper bound
-   std::vector<double> p1 = {0.0, 0.3};
+   std::vector<double> p1 = {-0.50000, 0.50000};
 //   gen_rand_controller(2, 0.0, 1.0);
-   std::vector<double> p2 = {0.0, 0.5};
-   std::vector<double> p3 = {0.0, 0.7};
-   std::vector<double> p4 = {0.0, 1.0};
+   std::vector<double> p2 = {-0.50000, 0.50000};
+   std::vector<double> p3 = {-0.50000, 0.50000};
+   std::vector<double> p4 = {-0.50000, 0.50000};
    galgo::Parameter<double> par1(p1);
    galgo::Parameter<double> par2(p2);
    galgo::Parameter<double> par3(p3);
    galgo::Parameter<double> par4(p4);
+   //std::vector<galgo::Parameter<double>> par = {par1(p1), par2(p2), par3(p3), par4(p4)};
    // here both parameter will be encoded using 16 bits the default value inside the template declaration
    // this value can be modified but has to remain between 1 and 64
 
    // initiliazing genetic algorithm
-   galgo::GeneticAlgorithm<double> ga(MyObjective<double>::Objective,100,150,true,par1,par2,par3,par4);
+   galgo::GeneticAlgorithm<double> ga(MyObjective<double>::Objective,100,100,true,par1,par2,par3,par4);
 
    // setting constraints
    ga.Constraint = MyConstraint;
 
    // running genetic algorithm
    ga.run();
-  /* std::vector<double> cst = ga.result()->getConstraint();
+   /*
+   std::vector<double> cst = ga.result()->getConstraint();
    std::cout << "seriously" << std::endl;
    //if(cst[0]>0)
    for (unsigned i = 0; i < cst.size(); i++) {

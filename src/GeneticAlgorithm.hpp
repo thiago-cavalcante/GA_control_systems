@@ -5,6 +5,7 @@
 #ifndef GENETICALGORITHM_HPP
 #define GENETICALGORITHM_HPP
 
+#include <iostream>
 namespace galgo {
 
 //=================================================================================================
@@ -58,15 +59,17 @@ public:
    // constructor
    template <int...N>
    GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const Parameter<T,N>&...args);
+   GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const std::vector<Parameter<T>>& args);
+
    // run genetic algorithm
    void run();
    // return best chromosome 
    const CHR<T>& result() const;
 
-private:
+public:
    int nbbit;     // total number of bits per chromosome
    int nbgen;     // number of generations
-   int nogen = 0; // numero of generation
+   int nogen = 0; // number of generation
    int nbparam;   // number of parameters to be estimated
    int popsize;   // population size
    bool output;   // control if results must be outputted
@@ -77,6 +80,7 @@ private:
    // recursion for initializing parameter(s) data
    template <int I = 0, int...N>
    typename std::enable_if<I < sizeof...(N), void>::type init(const TUP<T,N...>&);
+   void init(const std::vector<Parameter<T>>&);
 
    // check inputs validity
    void check() const ;
@@ -103,6 +107,23 @@ GeneticAlgorithm<T>::GeneticAlgorithm(Func<T> objective, int popsize, int nbgen,
    TUP<T,N...> tp(args...);
    // initializing parameter(s) data
    this->init(tp);
+}
+template <typename T>
+GeneticAlgorithm<T>::GeneticAlgorithm(Func<T> objective, int popsize, int nbgen, bool output, const std::vector<Parameter<T>>& args)
+{
+	this->Objective = objective;
+	   // getting total number of bits per chromosome
+	   this->nbbit = args.size()*2*sizeof(T);
+	   this->nbgen = nbgen;
+	   // getting number of parameters in the pack
+	   this->nbparam = args.size();
+	   this->popsize = popsize;
+	   this->matsize = popsize;
+	   this->output = output;
+//	   // unpacking parameter pack in tuple
+//	   TUP<T> tp(args...);
+//	   // initializing parameter(s) data
+	   this->init(args);
 }
 
 /*-------------------------------------------------------------------------------------------------*/
@@ -137,6 +158,31 @@ GeneticAlgorithm<T>::init(const TUP<T,N...>& tp)
    }
    // recursing
    init<I + 1>(tp);
+}
+
+template <typename T>
+void GeneticAlgorithm<T>::init(const std::vector<Parameter<T>>& vec)
+{
+  for(int i=0; i < vec.size(); i++)
+  {
+	auto par = vec[i];
+	// getting Ith parameter initial data
+	const std::vector<T>& data = par.getData();
+	// copying parameter data
+	param.emplace_back(new decltype(par)(par));
+	lowerBound.push_back(data[0]);
+ 	upperBound.push_back(data[1]);
+    // if parameter has initial value
+    if (data.size() > 2) {
+	  initialSet.push_back(data[2]);
+    }
+	// setting indexes for chromosome breakdown
+    if (i == 0) {
+	  idx.push_back(0);
+    } else {
+	        idx.push_back(idx[i - 1] + par.size());
+	     }
+  }
 }
 
 /*-------------------------------------------------------------------------------------------------*/

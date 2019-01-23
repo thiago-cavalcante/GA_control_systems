@@ -23,6 +23,9 @@
 #include <streambuf>
 #include <string>
 #include <vector>
+#include <tuple>
+#include <utility>
+
 
 /* eigen dependencies */
 #include <Eigen/Eigenvalues>
@@ -55,7 +58,7 @@ double y_k(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
   {
     y += (C * A.pow(k - m - 1) * B * u) + D * u;
   }
-  return y(0, 0);
+  return static_cast<double>(y(0, 0));
 }
 double y_ss(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
             Eigen::MatrixXd D, double u)
@@ -73,7 +76,6 @@ double y_ss(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
   yss = AUX2(0, 0) * u;
   return yss;
 }
-
 bool isSameSign(double a, double b)
 {
   if(((a >= 0) && (b >= 0)) || ((a <= 0) && (b <= 0)))
@@ -81,7 +83,6 @@ bool isSameSign(double a, double b)
   else
     return false;
 }
-
 double cplxMag(double real, double imag)
 {
   return sqrt(real * real + imag * imag);
@@ -92,7 +93,7 @@ double maxMagEigVal(Eigen::MatrixXd A)
   double maximum = 0, aux;
   int i;
   Eigen::VectorXcd eivals = A.eigenvalues();
-  for(i = 0; i < A.rows(); i++)
+  for(i = 0; i < static_cast<int>(A.rows()); i++)
   {
     _real = eivals[i].real();
     _imag = eivals[i].imag();
@@ -104,7 +105,6 @@ double maxMagEigVal(Eigen::MatrixXd A)
   }
   return maximum;
 }
-
 bool isEigPos(Eigen::MatrixXd A)
 {
   int isStable, i;
@@ -112,7 +112,7 @@ bool isEigPos(Eigen::MatrixXd A)
   bool status;
   isStable = ((maxMagEigVal(A) <= 1)&&(maxMagEigVal(A) >= 0)) ? 1:0;
   Eigen::VectorXcd eivals = A.eigenvalues();
-  for(i = 0; i < A.rows(); i++)
+  for(i = 0; i < static_cast<int>(A.rows()); i++)
   {
     lambda = eivals[i];
     if(lambda.real() >= 0)
@@ -128,7 +128,6 @@ bool isEigPos(Eigen::MatrixXd A)
   else
     return false;
 }
-
 void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
                  Eigen::MatrixXd D, Eigen::MatrixXd x0, double *out,
                  double yss, double u)
@@ -233,6 +232,56 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
 //  }
 //  std::cout << "unstable system! There's nothing to do!" << std::endl;
 //}
+double c_bar(double yp, double yss, double lambmax, int kp)
+{
+  double cbar;
+  cbar = (yp-yss)/(pow(lambmax, kp));
+  return cbar;
+}
+
+double log_b(double base, double x)
+{
+  return static_cast<double> (log(x) / log(base));
+}
+int objective_function_ST(Eigen::MatrixXd K)
+{
+  double k_ss, x, yp, yss, u;
+  double p = 5;
+  double peakV[2];
+  int kp, order = static_cast<int>(K.cols());
+  Eigen::MatrixXd A(order, order), C(1, order);
+
+  myA(0,0) = -0.5; myA(0,1) = 0.4; myA(0,2) = 1.0; myA(0,3) = 0.0;
+  myA(1,0) = -0.4; myA(1,1) = -0.5; myA(1,2) = 0.0; myA(1,3) = 1.0;
+  myA(2,0) = 0.0; myA(2,1) = 0.0; myA(2,2) = -0.5; myA(2,3) = 0.4;
+  myA(3,0) = 0.0; myA(3,1) = 0.0; myA(3,2) = -0.4; myA(3,3) = -0.5;
+
+  myB(0,0) = 0.0; myB(1,0) = 0.0; myB(2,0) = 2.5; myB(3,0) = 1.6;
+
+  myC(0,0) = 0.0; myC(0,1) = 2.6; myC(0,2) = 0.0; myC(0,3) = 2.0;
+
+  myD(0.0) = 0.0;
+
+  myx0(0,0) = 0.0; myx0(1,0) = 0.0; myx0(2,0) = 0.0; myx0(3,0) = 0.0;
+
+  A = myA - myB * K;
+  C = myC - myD * K;
+
+  double lambdaMax;
+  lambdaMax = maxMagEigVal(A);
+  u = 1.0;
+  yss = y_ss(A, myB, C, myD, u);
+  std::cout << "lambdaMax= " << lambdaMax << std::endl;
+  std::cout << "order= " << order << std::endl;
+  std::cout << "yss= " << yss << std::endl;
+  peak_output(A, myB, C, myD, myx0, peakV, yss, u);
+  yp = static_cast<double> (peakV[1]);
+  kp = static_cast<int> (peakV[0]);
+  double cbar = c_bar(yp, yss, lambdaMax, kp);
+  x = fabs((p * yss) / (100 * cbar));
+  k_ss = log_b(lambdaMax, x);
+  return abs(ceil(k_ss)) + order;
+}
 
 double objective_function_OS(Eigen::MatrixXd K)
 {
@@ -300,8 +349,9 @@ public:
       K(0,i) = static_cast<double>(x[i]);
     }
 //	  T obj = my_function(K);
-    T obj = -objective_function_OS(K);
-    return {obj};
+    T obj1 = -objective_function_ST(K);
+//    T obj2 = -objective_function_OS(K);
+    return {obj1};
   }
   // NB: GALGO maximize by default so we will maximize -f(x,y)
 };
@@ -312,27 +362,16 @@ public:
 template <typename T>
 std::vector<T> MyConstraint(const std::vector<T>& x)
 {
-  int order = static_cast<int> (x.size());
-  Eigen::MatrixXd K(1, order), A(order, order), C(1, order);
-  int POr = 0.3, kp;
-  double lambdaMax, yss, yp, mp, _PO, u;
+  double lambdaMax, u, yss, yp, cbar, temp, k_ss, mp, _PO;
+  int kp, order, kh, ksr = 10;
+  double p = 5;
   double peakV[2];
-  u = 1.0;
-  lambdaMax = 0.0;
-  for(int i = 0; i < order; i++)
+  Eigen::MatrixXd K(1, x.size()), A(x.size(), x.size()), C(1, x.size());
+  for(int i = 0; i < static_cast<int>(x.size()); i++)
   {
     K(0, i) = static_cast<double>(x[i]);
   }
-
-/*  myA(0,0) = -0.5; myA(0,1) = 0.4;
-  myA(1,0) = -0.4; myA(1,1) = -0.5;
-
-  myB(0,0) = 0.0; myB(1,0) = 2.5;
-
-  myC(0,0) = 0.0; myC(0,1) = 2.6;
-
-  myD(0.0) = 0.0;*/
-
+  order = K.cols();
   myA(0,0) = -0.5; myA(0,1) = 0.4; myA(0,2) = 1.0; myA(0,3) = 0.0;
   myA(1,0) = -0.4; myA(1,1) = -0.5; myA(1,2) = 0.0; myA(1,3) = 1.0;
   myA(2,0) = 0.0; myA(2,1) = 0.0; myA(2,2) = -0.5; myA(2,3) = 0.4;
@@ -350,19 +389,24 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
   C = myC - myD * K;
 
   lambdaMax = maxMagEigVal(A);
-
+  u = 1.0;
   yss = y_ss(A, myB, C, myD, u);
   peak_output(A, myB, C, myD, myx0, peakV, yss, u);
   yp = static_cast<double> (peakV[1]);
+  kp = static_cast<int> (peakV[0]);
+  cbar = c_bar(yp, yss, lambdaMax, kp);
+  temp = fabs((p * yss) / (100 * cbar));
+  k_ss = log_b(lambdaMax, temp);
+  kh = abs(ceil(k_ss)) + order;
   mp = cplxMag(cplxMag(yp,0)-cplxMag(yss,0),0);
   _PO = cplxMag((mp/cplxMag(yss,0)),0);
 //  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
-//  return {-k_bar(K), k_bar(K)-ksr, -check_state_space_stability(A), check_state_space_stability(A)-1};
-//  return {-_PO, _PO-POr, -maxMagEigVal(A), maxMagEigVal(A)-1};
-  //return {-objective_function_OS(K), maxMagEigVal(A)-1};
-//  return { -maxMagEigVal(A), maxMagEigVal(A)-1, -_PO, _PO-POr};
-//  return { -lambdaMax, lambdaMax-1.0, -objective_function_OS(K), objective_function_OS(K)-POr};
-  return { -lambdaMax, lambdaMax-1.0, -_PO, _PO-0.30};
+//  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A)+1};
+//  return {-check_state_space_stability(A)+1};
+  return { -lambdaMax, lambdaMax-1.0, -kh, kh-ksr/*, -_PO*/, _PO-0.30 };
+  //return {-maxMagEigVal(A), maxMagEigVal(A)-1};
+//  return {-check_state_space_stability(A), check_state_space_stability(A)-1};
+//  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 
 // using the default adaptation to constraint(s) method
@@ -371,24 +415,74 @@ int main()
 {
    // initializing parameters lower and upper bounds
    // an initial value can be added inside the initializer list after the upper bound
-   std::vector<double> p1 = {-0.50, 0.50};
-//   gen_rand_controller(2, 0.0, 1.0);
-   std::vector<double> p2 = {-0.50, 0.50};
-   std::vector<double> p3 = {-0.50, 0.50};
-   std::vector<double> p4 = {-0.50, 0.50};
+//   std::pair <double, double> p1 = std::make_pair(-0.50000, 0.50000);
+   std::vector<double> p1 = {-0.50000, 0.50000};
+   std::vector<double> p2 = {-0.50000, 0.50000};
+   std::vector<double> p3 = {-0.50000, 0.50000};
+   std::vector<double> p4 = {-0.50000, 0.50000};
+
    galgo::Parameter<double> par1(p1);
    galgo::Parameter<double> par2(p2);
    galgo::Parameter<double> par3(p3);
    galgo::Parameter<double> par4(p4);
+
+//   galgo::TUP<double,4> p(par1,par2,par3,par4);
+//    std::vector<double> p = {-0.50000, 0.50000};
+//    galgo::Parameter<double> par(p);
+//   std::vector<double> p;
+//   p.push_back(-0.5);
+//   p.push_back(0.5);
+//   p.push_back(-0.5);
+//   p.push_back(0.5);
+//   p.push_back(-0.5);
+//   p.push_back(0.5);
+//   p.push_back(-0.5);
+//   p.push_back(0.5);
+//   galgo::Parameter<double> par(p);
+//   std::vector<galgo::Parameter<double>> q;
+//   q.push_back(p);
    // here both parameter will be encoded using 16 bits the default value inside the template declaration
    // this value can be modified but has to remain between 1 and 64
-
+   std::vector<galgo::Parameter<double>> myargs;
+   for(int i=0; i < 4; i++)
+   {
+	 myargs.push_back(par1);
+   }
+//   myargs.push_back(p1);
+//   myargs.push_back(p2);
+//   myargs.push_back(p3);
+//   myargs.push_back(p4);
    // initiliazing genetic algorithm
-   galgo::GeneticAlgorithm<double> ga(MyObjective<double>::Objective,400,600,true,par1,par2,par3,par4);
+   galgo::GeneticAlgorithm<double> ga(MyObjective<double>::Objective,300,300,true,par1,par2,par3,par4);
+   galgo::GeneticAlgorithm<double> ga2(MyObjective<double>::Objective,300,300,true,myargs);
 
    // setting constraints
    ga.Constraint = MyConstraint;
+   ga2.Constraint = MyConstraint;
+
+   std::cout << "N=" << ga.nbbit <<std::endl;
+   std::cout << "nbparam=" << ga.nbparam <<std::endl;
+   std::cout << "N2=" << ga2.nbbit <<std::endl;
+   std::cout << "nbparam2=" << ga2.nbparam <<std::endl;
+   std::cout << "sizeof(par1)=" << sizeof(double) <<std::endl;
+   std::cout << "sizeof(par1)=" << sizeof(int) <<std::endl;
 
    // running genetic algorithm
-   ga.run();
+   ga2.run();
+   /*
+   std::vector<double> cst = ga.result()->getConstraint();
+   std::cout << "seriously" << std::endl;
+   //if(cst[0]>0)
+   for (unsigned i = 0; i < cst.size(); i++) {
+	   if(cst[i] > 0){
+		   ga.run();
+		      std::vector<double> cst = ga.result()->getConstraint();
+	   }
+             /*  std::cout << " C";
+               //if (nbparam > 1) {
+                  std::cout << std::to_string(i + 1);
+               //}
+               std::cout << "(x) = " << std::setw(6) << std::fixed << std::setprecision(10) << cst[i] << "\n";
+            *//*}
+            std::cout << "\n";*/
 }

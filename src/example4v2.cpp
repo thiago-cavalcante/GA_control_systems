@@ -139,10 +139,6 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
   firstGradSample = y_k(A, B, C, D, u, i, x0);
   lastPeak = y_k(A, B, C, D, u, i, x0);
   lastPeakIdx = i;
-//  std::cout << "firstGradSample=" << firstGradSample << std::endl;
-//  std::cout << "lastGrad=" << lastGrad << std::endl;
-//  std::cout << "grad=" << grad << std::endl;
-//  std::cout << "lastPeak=" << lastPeak << std::endl;
   if(isStable == 1)
   {
     while(1)
@@ -150,18 +146,15 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
       if(fabs(y_k(A, B, C, D, u, i+1, x0)) >= fabs(y_k(A, B, C, D, u, i, x0)))
       {
         grad = (grad > 0)?(grad + 1):1;
-//        std::cout << "grad=" << grad << std::endl ;
         if(fabs(y_k(A, B, C, D, u, i+1, x0)) != fabs(y_k(A, B, C, D, u, i, x0)))
         {
           firstGradSample = y_k(A, B, C, D, u, i+1, x0);
-//          std::cout << "firstGradSample=" << firstGradSample << std::endl;
           firstGradSampleIdx = i + 1;
         }
       }
       else
       {
         grad = (grad < 0)?(grad - 1):-1;
-//        std::cout << "grad=" << grad << std::endl;
       }
       if((lastGrad > 0) && (grad < 0))
       {
@@ -176,7 +169,6 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
         else
         {
           lastPeak = firstGradSample;
-//          std::cout << "lastPeak=" << lastPeak << std::endl;
           lastPeakIdx = firstGradSampleIdx;
         }
       }
@@ -185,13 +177,11 @@ void peak_output(Eigen::MatrixXd A, Eigen::MatrixXd B, Eigen::MatrixXd C,
         if(fabs(yss) > fabs(lastPeak))
         {
           lastPeak = yss;
-          std::cout << "lastPeak=" << lastPeak << std::endl;
           lastPeakIdx = 0;
         }
         break;
       }
       lastGrad = grad;
-//      std::cout << "lastGrad=" << lastGrad << std::endl;
       ++i;
     }
     out[0] = lastPeakIdx;
@@ -280,7 +270,7 @@ int objective_function_ST(Eigen::MatrixXd K)
   double cbar = c_bar(yp, yss, lambdaMax, kp);
   x = fabs((p * yss) / (100 * cbar));
   k_ss = log_b(lambdaMax, x);
-  return abs(ceil(k_ss)) + order;
+  return abs(ceil(k_ss));
 }
 
 double objective_function_OS(Eigen::MatrixXd K)
@@ -331,6 +321,16 @@ double objective_function_OS(Eigen::MatrixXd K)
   return _PO;
 }
 
+double objective_function_sumK(Eigen::MatrixXd K)
+{
+  double res = 0;
+  for(int i = 0; i < static_cast<int>(K.cols(); i++)
+  {
+    res = res + K(0,i);
+  }
+  return res;
+}
+
 // objective class example
 template <typename T>
 class MyObjective
@@ -342,16 +342,15 @@ public:
 //  static std::vector<T> Objective(const Eigen::MatrixXd K)
   static std::vector<T> Objective(const std::vector<T>& x)
   {
-//     T obj = -(pow(1-x[0],2)+100*pow(x[1]-x[0]*x[0],2));
     Eigen::MatrixXd K(1, x.size());
     for(int i = 0; i < static_cast<int>(x.size()); i++)
     {
       K(0,i) = static_cast<double>(x[i]);
     }
-//	  T obj = my_function(K);
-    T obj1 = -objective_function_ST(K);
-//    T obj2 = -objective_function_OS(K);
-    return {obj1};
+	  T obj = -objective_function_sumK(K);
+    // T obj1 = -objective_function_ST(K);
+    // T obj2 = -objective_function_OS(K);
+    return {obj};
   }
   // NB: GALGO maximize by default so we will maximize -f(x,y)
 };
@@ -397,16 +396,10 @@ std::vector<T> MyConstraint(const std::vector<T>& x)
   cbar = c_bar(yp, yss, lambdaMax, kp);
   temp = fabs((p * yss) / (100 * cbar));
   k_ss = log_b(lambdaMax, temp);
-  kh = abs(ceil(k_ss)) + order;
+  kh = abs(ceil(k_ss));
   mp = cplxMag(cplxMag(yp,0)-cplxMag(yss,0),0);
   _PO = cplxMag((mp/cplxMag(yss,0)),0);
-//  return {K(0,0)*K(0,1)+K(0,0)-K(0,1)+1.5,10-K(0,0)*K(0,1)};
-//  return {-objective_function_ST(K), objective_function_ST(K)-ksr, -check_state_space_stability(A)+1};
-//  return {-check_state_space_stability(A)+1};
   return { -lambdaMax, lambdaMax-1.0, -kh, kh-ksr/*, -_PO*/, _PO-0.30 };
-  //return {-maxMagEigVal(A), maxMagEigVal(A)-1};
-//  return {-check_state_space_stability(A), check_state_space_stability(A)-1};
-//  -check_state_space_stability(A)
 }
 // NB: a penalty will be applied if one of the constraints is > 0 
 // using the default adaptation to constraint(s) method
@@ -416,31 +409,10 @@ int main()
    // initializing parameters lower and upper bounds
    // an initial value can be added inside the initializer list after the upper bound
 //   std::pair <double, double> p1 = std::make_pair(-0.50000, 0.50000);
-   std::vector<double> p1 = {-0.50000, 0.50000};
-   std::vector<double> p2 = {-0.50000, 0.50000};
-   std::vector<double> p3 = {-0.50000, 0.50000};
-   std::vector<double> p4 = {-0.50000, 0.50000};
+   std::vector<double> p1 = {-1000.50000, 1000.50000};
 
    galgo::Parameter<double> par1(p1);
-   galgo::Parameter<double> par2(p2);
-   galgo::Parameter<double> par3(p3);
-   galgo::Parameter<double> par4(p4);
 
-//   galgo::TUP<double,4> p(par1,par2,par3,par4);
-//    std::vector<double> p = {-0.50000, 0.50000};
-//    galgo::Parameter<double> par(p);
-//   std::vector<double> p;
-//   p.push_back(-0.5);
-//   p.push_back(0.5);
-//   p.push_back(-0.5);
-//   p.push_back(0.5);
-//   p.push_back(-0.5);
-//   p.push_back(0.5);
-//   p.push_back(-0.5);
-//   p.push_back(0.5);
-//   galgo::Parameter<double> par(p);
-//   std::vector<galgo::Parameter<double>> q;
-//   q.push_back(p);
    // here both parameter will be encoded using 16 bits the default value inside the template declaration
    // this value can be modified but has to remain between 1 and 64
    std::vector<galgo::Parameter<double>> myargs;
@@ -448,24 +420,14 @@ int main()
    {
 	 myargs.push_back(par1);
    }
-//   myargs.push_back(p1);
-//   myargs.push_back(p2);
-//   myargs.push_back(p3);
-//   myargs.push_back(p4);
    // initiliazing genetic algorithm
-   galgo::GeneticAlgorithm<double> ga(MyObjective<double>::Objective,300,300,true,par1,par2,par3,par4);
    galgo::GeneticAlgorithm<double> ga2(MyObjective<double>::Objective,300,300,true,myargs);
 
    // setting constraints
-   ga.Constraint = MyConstraint;
    ga2.Constraint = MyConstraint;
 
-   std::cout << "N=" << ga.nbbit <<std::endl;
-   std::cout << "nbparam=" << ga.nbparam <<std::endl;
-   std::cout << "N2=" << ga2.nbbit <<std::endl;
-   std::cout << "nbparam2=" << ga2.nbparam <<std::endl;
-   std::cout << "sizeof(par1)=" << sizeof(double) <<std::endl;
-   std::cout << "sizeof(par1)=" << sizeof(int) <<std::endl;
+   std::cout << "N=" << ga2.nbbit <<std::endl;
+   std::cout << "nbparam=" << ga2.nbparam <<std::endl;
 
    // running genetic algorithm
    ga2.run();

@@ -324,7 +324,7 @@ double objective_function_OS(Eigen::MatrixXd K)
 double objective_function_sumK(Eigen::MatrixXd K)
 {
   double res = 0;
-  for(int i = 0; i < static_cast<int>(K.cols(); i++)
+  for(int i = 0; i < static_cast<int>(K.cols()); i++)
   {
     res = res + K(0,i);
   }
@@ -409,7 +409,7 @@ int main()
    // initializing parameters lower and upper bounds
    // an initial value can be added inside the initializer list after the upper bound
 //   std::pair <double, double> p1 = std::make_pair(-0.50000, 0.50000);
-   std::vector<double> p1 = {-1000.50000, 1000.50000};
+   std::vector<double> p1 = {-0.50000/2, 0.5000/2};
 
    galgo::Parameter<double> par1(p1);
 
@@ -421,7 +421,7 @@ int main()
 	 myargs.push_back(par1);
    }
    // initiliazing genetic algorithm
-   galgo::GeneticAlgorithm<double> ga2(MyObjective<double>::Objective,300,300,true,myargs);
+   galgo::GeneticAlgorithm<double> ga2(MyObjective<double>::Objective,800,300,true,myargs);
 
    // setting constraints
    ga2.Constraint = MyConstraint;
